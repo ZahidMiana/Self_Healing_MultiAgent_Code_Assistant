@@ -1,5 +1,3 @@
-.env
-.env.*
 !.env.example
 __pycache__/
 *.pyc
@@ -18,3 +16,4 @@ coverage/
 Docs/rule.md
 Docs/module1.md
 Docs/Mod1Interview.md
+config.bat
