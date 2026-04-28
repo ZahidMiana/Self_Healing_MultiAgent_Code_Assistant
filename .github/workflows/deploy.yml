@@ -1,0 +1,55 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND: agentforge-backend
+  ECR_FRONTEND: agentforge-frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        run: |
+          docker build -f backend/Dockerfile.prod -t $ECR_BACKEND backend/
+          docker tag $ECR_BACKEND:latest \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_BACKEND:latest
+          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_BACKEND:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build -f frontend/Dockerfile.prod -t $ECR_FRONTEND frontend/
+          docker tag $ECR_FRONTEND:latest \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_FRONTEND:latest
+          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_FRONTEND:latest
+
+      - name: Deploy on EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/agentforge
+            aws ecr get-login-password --region us-east-1 | \
+              docker login --username AWS --password-stdin \
+              ${{ steps.login-ecr.outputs.registry }}
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans

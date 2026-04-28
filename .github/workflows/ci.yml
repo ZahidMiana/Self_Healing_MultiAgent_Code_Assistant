@@ -1,0 +1,42 @@
+name: CI - Test and Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Poetry
+        run: pip install poetry==1.8.3
+      - name: Install deps
+        run: cd backend && poetry install
+      - name: Lint
+        run: cd backend && poetry run ruff check app/ tests/
+      - name: Test
+        run: cd backend && poetry run pytest tests/ -v
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_PASSWORD: testpassword
+          SECRET_KEY: test-secret-key
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install pnpm
+        run: npm install -g pnpm
+      - name: Install deps
+        run: cd frontend && pnpm install
+      - name: Type check
+        run: cd frontend && pnpm tsc --noEmit
